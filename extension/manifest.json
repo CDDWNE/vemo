@@ -3,14 +3,18 @@
     "name": "Vemo",
     "version": "1.0",
     "description": "YouTube 영상 요약 및 메모 기능 확장 프로그램",
-    "permissions": ["storage", "activeTab", "scripting", "tabs"],
-    "host_permissions": ["*://*.youtube.com/*", "http://localhost:3000/*", "<all_urls>"],
+    "permissions": ["storage", "activeTab", "scripting", "tabs", "desktopCapture"],
+    "host_permissions": ["<all_urls>"],
     "background": {
         "service_worker": "background.js"
     },
     "content_scripts": [
         {
             "matches": ["*://*.youtube.com/*"],
+            "js": ["youtube.js"]
+        },
+        {
+            "matches": ["http://*/*", "https://*/*"],
             "js": ["content.js"]
         }
     ],
