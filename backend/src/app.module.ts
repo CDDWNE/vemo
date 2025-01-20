@@ -10,7 +10,9 @@ import { CapturesModule } from './captures/captures.module';
 import { ChannelModule } from './channel/channel.module';
 import { typeOrmConfig } from './config/typeorm.config';
 import { HomeModule } from './home/home.module';
+import { MemoModule } from './memo/memo.module';
 import { MemosModule } from './memos/memos.module';
+import { PdfModule } from './pdf/pdf.module';
 import { PlaylistModule } from './playlist/playlist.module';
 import { QuizModule } from './quiz/quiz.module';
 import { S3Module } from './s3/s3.module';
@@ -22,12 +24,6 @@ import { VemoModule } from './vemo/vemo.module';
 import { VideoModule } from './video/video.module';
 import { YoutubeAuthModule } from './youtubeauth/youtube-auth.module';
 
-// import { RedisConfigService } from './config/redis.config';
-import { CacheModule } from '@nestjs/cache-manager';
-import * as redisStore from 'cache-manager-ioredis';
-import { MemoModule } from './memo/memo.module';
-import { PdfModule } from './pdf/pdf.module';
-
 @Module({
     imports: [
         ConfigModule.forRoot({
@@ -37,17 +33,6 @@ import { PdfModule } from './pdf/pdf.module';
         TypeOrmModule.forRootAsync({
             imports: [ConfigModule],
             useFactory: (configService: ConfigService) => typeOrmConfig(configService),
-            inject: [ConfigService],
-        }),
-        CacheModule.registerAsync({
-            isGlobal: true,
-            imports: [ConfigModule],
-            useFactory: (configService: ConfigService) => ({
-                store: redisStore,
-                host: configService.get('REDIS_HOST', 'localhost'),
-                port: configService.get('REDIS_PORT', 6379),
-                ttl: 3600,
-            }),
             inject: [ConfigService],
         }),
         MemoModule,
