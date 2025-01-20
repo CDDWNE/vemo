@@ -1,5 +1,4 @@
 import {
-    Inject,
     Injectable,
     InternalServerErrorException,
     Logger,
@@ -7,9 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { S3 } from 'aws-sdk';
 import { Repository } from 'typeorm';
-import { v4 as uuidv4 } from 'uuid';
 import { Memos } from '../memos/memos.entity';
 import { Captures } from './captures.entity';
 import { CreateCapturesDto } from './dto/create-capture.dto';
@@ -19,43 +16,40 @@ import { UpdateCapturesDto } from './dto/update-capture.dto';
 
 @Injectable()
 export class CapturesService {
-    private readonly bucketName: string;
     private readonly logger = new Logger(CapturesService.name);
 
     constructor(
         @InjectRepository(Memos) private readonly memosRepository: Repository<Memos>,
         @InjectRepository(Captures) private capturesRepository: Repository<Captures>,
-        @Inject('S3') private readonly s3: S3,
         // @Inject(CACHE_MANAGER) private cacheManager: Cache,
         private readonly configService: ConfigService,
-    ) {
-        this.bucketName = this.configService.get<string>('AWS_S3_BUCKET');
-    }
+    ) {}
 
     async createCapture(createCapturesDto: CreateCapturesDto, isScrap = false): Promise<Captures> {
         try {
             const { memosId, image, ...rest } = createCapturesDto;
+
+            // memos 존재 여부 확인
             const memos = await this.memosRepository.findOne({
                 where: { id: memosId },
             });
 
+            if (!memos) {
+                throw new NotFoundException(`Memos with ID ${memosId} not found`);
+            }
+
+            // base64 이미지 데이터를 직접 DB에 저장
             const captures = this.capturesRepository.create({
                 ...rest,
                 memos,
+                image: image, // base64 이미지 데이터를 직접 저장
             });
-
-            if (!isScrap) {
-                const uploadUrl = await this.uploadBase64ToS3(createCapturesDto.image, 'captures');
-                this.logger.log('uploadUrl', uploadUrl);
-                captures.image = uploadUrl;
-            } else {
-                captures.image = image;
-            }
 
             const savedCapture = await this.capturesRepository.save(captures);
             // await this.invalidateCache();
             return savedCapture;
         } catch (error) {
+            this.logger.error('Create capture failed:', error);
             throw new InternalServerErrorException('Failed to create capture', {
                 cause: error,
             });
@@ -132,9 +126,9 @@ export class CapturesService {
                 throw new NotFoundException(`Capture with ID ${id} not found`);
             }
 
+            // 이미지 데이터 직접 업데이트
             if (updateCapturesDto.image) {
-                const uploadUrl = await this.uploadBase64ToS3(updateCapturesDto.image, 'captures');
-                capture.image = uploadUrl;
+                capture.image = updateCapturesDto.image;
             }
 
             const updatedCapture = await this.capturesRepository.save(capture);
@@ -170,29 +164,4 @@ export class CapturesService {
     //     await Promise.all(promises.map(key => this.cacheManager.del(key)));
     //     this.logger.log('Cache invalidated');
     // }
-
-    async uploadBase64ToS3(base64: string, folder: string): Promise<string> {
-        try {
-            const base64Data = base64.replace(/^data:image\/\w+;base64,/, '');
-            const buffer = Buffer.from(base64Data, 'base64');
-            const ext = base64.match(/data:image\/(\w+);base64/)?.[1] || 'png';
-            const fileName = `${folder}/${uuidv4()}.${ext}`;
-
-            const uploadResult = await this.s3
-                .upload({
-                    Bucket: 'vemo-data-bucket',
-                    Key: fileName,
-                    Body: buffer,
-                    ContentEncoding: 'base64',
-                    ContentType: `image/${ext}`,
-                })
-                .promise();
-
-            return uploadResult.Location;
-        } catch (error) {
-            throw new InternalServerErrorException('S3 업로드에 실패했습니다.', {
-                cause: error,
-            });
-        }
-    }
 }
